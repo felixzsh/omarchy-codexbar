@@ -142,7 +142,11 @@ Panel {
     function hide(): void { root.close() }
     function toggle(): void { root.toggle() }
     function refresh(): string { root.refreshNow(); return "ok" }
-    function status(): string { return JSON.stringify(usage.statusSnapshot()) }
+    function status(): string {
+      var snap = usage.statusSnapshot()
+      snap.widget = { visible: root.visible, opened: root.opened, providerCount: root.providers.length }
+      return JSON.stringify(snap)
+    }
   }
 
   BarIconButton {
