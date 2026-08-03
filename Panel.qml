@@ -374,11 +374,9 @@ Panel {
 
             trailingControl: Component {
               Dropdown {
-                id: providerPicker
-                width: Style.space(150)
+                width: Math.min(Style.spacing.dropdownWidth, Style.space(180))
                 showLabel: false
                 fontFamily: root.fontFamily
-                foreground: root.foreground
                 options: root.providerOptions
                 value: root.selectedProviderId
                 onChanged: function(v) { root.selectProviderId(v) }
