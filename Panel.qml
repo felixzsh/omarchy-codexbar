@@ -278,7 +278,7 @@ Panel {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: "\uf0e4"
+    text: "󱚣"
     active: root.alarming
     tooltipText: root.barTooltip()
     onPressed: function(buttonCode) {
