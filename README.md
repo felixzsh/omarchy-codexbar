@@ -7,25 +7,22 @@ native Model Usage widget.
 
 The widget is a thin **wrapper around [CodexBar](https://github.com/steipete/CodexBar)**.
 All provider logic — authentication, cookies, workspace lookup, quota parsing,
-and refresh — is delegated to `codexbar serve`. The plugin only polls its JSON
-endpoints (`/usage` and `/cost`), normalizes the payloads, and renders a panel
-in the native Model Usage style. It never reads provider databases or guesses
-usage itself.
+and refresh — is delegated to the `codexbar` CLI. The plugin runs
+`codexbar usage` and `codexbar cost` directly via `Process` (no `codexbar serve`
+daemon, no port), normalizes the payloads, and renders a panel in the native
+Model Usage style. It never reads provider databases or guesses usage itself.
 
 ## Requirements
 
-- `codexbar-cli` (Arch: `yay -S codexbar-cli`; other Linux: release tarballs
-  from the [CodexBar releases](https://github.com/steipete/CodexBar/releases)).
-- A running server, in its own terminal or a service:
-
-  ```bash
-  codexbar serve --port 8080
-  ```
-
+- `codexbar-cli` on `PATH` (Arch: `yay -S codexbar-cli`; other Linux: release
+  tarballs from the [CodexBar releases](https://github.com/steipete/CodexBar/releases)).
+  No server to run — the plugin calls `codexbar` itself.
 - Providers enabled in CodexBar's config (`codexbar config providers`,
   Settings, or `codexbar config enable --provider <id>`). On Linux, browser
   cookie sources are macOS-only; use API keys, local CLIs, or manual cookies
-  where a provider supports them.
+  where a provider supports them. See the
+  [CodexBar OpenCode doc](https://github.com/steipete/CodexBar/blob/main/docs/opencode.md)
+  for the OpenCode Go `cookieHeader` setup if you want web-sourced usage.
 
 ## Install
 
@@ -67,26 +64,28 @@ Providers with no usable data are excluded from the panel and the selector.
 Settings live in the widget's entry in `~/.config/omarchy/shell.json`:
 
 ```bash
-omarchy bar set local.codexbar codexbarUrl http://127.0.0.1:8080 --json
+omarchy bar set local.codexbar codexbarBin /usr/bin/codexbar --json
 ```
 
 | Key | Default | What it does |
 |---|---|---|
-| `codexbarUrl` | `http://127.0.0.1:8080` | The `codexbar serve` endpoint |
-| `refreshIntervalSec` | `120` | How often the panel polls the server |
+| `codexbarBin` | `codexbar` | Command name or path to the codexbar CLI |
+| `refreshIntervalSec` | `120` | Background poll interval for usage (opens the panel to force a fetch) |
 
 ## Troubleshooting
 
 ```bash
-omarchy-shell local.codexbar status   # server + widget + providers at a glance
+omarchy-shell local.codexbar status   # binary, version, widget + providers at a glance
 ```
 
-- `serverOnline: false` — `codexbar serve` is not reachable at `codexbarUrl`;
-  start it and confirm `curl http://127.0.0.1:8080/health`.
+- `usageStatusText` says `failed to run (exit N)` — the `codexbar` binary was not
+  found or crashed. Check `codexbar --version` and the `codexbarBin` setting.
+- `usageStatusText` says `no parseable usage` — run `codexbar usage --format json`
+  manually to see the error.
 - No providers — no enabled CodexBar provider returned usable data. Enable one
   in CodexBar and check `codexbar usage --format json`.
-- The widget is dimmed but present when the server is up with nothing to show;
-  opening the panel explains why.
+- The widget is always visible once placed; opening the panel explains any
+  failure instead of hiding the icon.
 
 The shell caches compiled plugin QML, so after updating the plugin code the
 widget can keep running the old version until the shell restarts:
