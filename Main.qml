@@ -60,28 +60,59 @@ Item {
   function refresh(force) {
     if (root.refreshing) return
     root.refreshing = true
-    root.fetchJson(root.serverUrl + "/usage?provider=all", function(ok, data, status, raw) {
+    var base = []
+    var costMap = {}
+    var usageLoaded = false
+    var costLoaded = false
+
+    function finish() {
+      if (!usageLoaded || !costLoaded) return
+      // Attach the per-day token history CodexBar reports (codex/claude local
+      // logs) to the matching provider; everyone else keeps an empty chart.
+      for (var i = 0; i < base.length; i++) {
+        var cost = costMap[base[i].providerId]
+        if (cost) {
+          base[i].recentDays = cost.recentDays
+          base[i].dailyUpdatedAt = cost.updatedAt
+        }
+      }
       root.refreshing = false
       root.lastRefreshedAtMs = Date.now()
+      root.allProviders = base
+      root.validProviders = Cbx.filterValid(base)
+      root.revision++
+    }
+
+    root.fetchJson(root.serverUrl + "/usage?provider=all", function(ok, data, status) {
+      usageLoaded = true
       if (!ok) {
         root.serverOnline = false
         root.serverVersion = ""
-        root.allProviders = []
-        root.validProviders = []
         root.lastError = status === 0
           ? "CodexBar server not reachable at " + root.serverUrl + ". Run `codexbar serve`."
           : "CodexBar server returned HTTP " + status + "."
         root.usageStatusText = root.lastError
-        root.revision++
-        return
+      } else {
+        root.serverOnline = true
+        root.lastError = ""
+        root.usageStatusText = ""
+        base = Cbx.normalizeProviders(data || [])
       }
-      root.serverOnline = true
-      root.lastError = ""
-      root.usageStatusText = ""
-      root.allProviders = Cbx.normalizeProviders(data || [])
-      root.validProviders = Cbx.validProviders(data || [])
-      root.revision++
+      finish()
     })
+
+    root.fetchJson(root.serverUrl + "/cost?provider=all", function(ok, data) {
+      costLoaded = true
+      if (ok && Array.isArray(data)) {
+        for (var i = 0; i < data.length; i++) {
+          var rec = data[i]
+          if (!rec || !rec.provider || rec.error) continue
+          costMap[String(rec.provider)] = Cbx.normalizeCost(rec)
+        }
+      }
+      finish()
+    })
+
     // Best-effort version badge; a failure here never masks a good usage read.
     root.fetchJson(root.serverUrl + "/health", function(ok, health) {
       if (ok && health && health.version) root.serverVersion = String(health.version)
@@ -90,6 +121,14 @@ Item {
 
   function refreshAll(force) { refresh(force) }
   function refreshLimits() { refresh() }
+
+  function formatTokenCount(n) {
+    if (n === undefined || n === null) return "0"
+    if (n >= 1e9) return (n / 1e9).toFixed(1) + "B"
+    if (n >= 1e6) return (n / 1e6).toFixed(1) + "M"
+    if (n >= 1e3) return (n / 1e3).toFixed(1) + "K"
+    return String(n)
+  }
 
   // JSON snapshot for `omarchy-shell local.codexbar status`.
   function statusSnapshot() {
