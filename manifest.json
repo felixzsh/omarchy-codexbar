@@ -19,11 +19,11 @@
     "allowMultiple": false,
     "defaultSection": "right",
     "defaults": {
-      "codexbarUrl": "http://127.0.0.1:8080",
+      "codexbarBin": "codexbar",
       "refreshIntervalSec": 120
     },
     "schema": [
-      { "key": "codexbarUrl", "type": "string", "label": "CodexBar server URL", "defaultValue": "http://127.0.0.1:8080", "description": "The `codexbar serve` endpoint. Start it with `codexbar serve --port 8080`." },
+      { "key": "codexbarBin", "type": "string", "label": "CodexBar binary", "defaultValue": "codexbar", "description": "Command name or absolute path to the codexbar CLI. Defaults to `codexbar` on PATH." },
       { "key": "refreshIntervalSec", "type": "integer", "label": "Refresh interval (seconds)", "min": 30, "max": 3600, "step": 30, "defaultValue": 120 }
     ]
   }

@@ -211,7 +211,7 @@ Panel {
 
   function updatedText() {
     var when = "updated " + root.timeAgo(usage.lastRefreshedAtMs)
-    if (usage.serverVersion !== "" && usage.serverOnline) return "CodexBar " + usage.serverVersion + " · " + when
+    if (usage.codexbarVersion !== "") return "CodexBar " + usage.codexbarVersion + " · " + when
     return when
   }
 
@@ -234,14 +234,20 @@ Panel {
     return label
   }
 
-  visible: usage.serverOnline || providers.length > 0
+  // The slot is the user's choice: once placed, the icon stays put and the
+  // panel explains any failure (binary missing, no provider data) when opened,
+  // instead of the widget silently vanishing.
+  visible: true
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
   onOpenedChanged: if (opened) {
     nowMs = Date.now()
     if (panelFlick) panelFlick.contentY = 0
-    usage.refresh()
+    // Fetch usage now (restarting the background countdown) and pull the
+    // heavier cost history for the daily token chart.
+    usage.pollNow()
+    usage.refreshCost()
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
 
