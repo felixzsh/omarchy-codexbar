@@ -1,0 +1,115 @@
+#!/usr/bin/env node
+"use strict"
+
+const assert = require("assert")
+const path = require("path")
+const model = require(path.join(__dirname, "..", "providers", "codexbar-model.js"))
+
+// Fixture 1: the real opencodego payload captured from `codexbar serve`.
+const opencodego = [
+  {
+    provider: "opencodego",
+    source: "local",
+    usage: {
+      updatedAt: "2026-08-03T13:56:50Z",
+      primary: { resetsAt: "2026-08-03T18:08:59Z", usedPercent: 5.8, windowMinutes: 300 },
+      secondary: { resetsAt: "2026-08-09T23:59:59Z", usedPercent: 3.8, windowMinutes: 10080 },
+      tertiary: { resetsAt: "2026-08-29T20:39:29Z", usedPercent: 5.9, windowMinutes: 43200 }
+    }
+  }
+]
+
+{
+  const list = model.normalizeProviders(opencodego)
+  assert.strictEqual(list.length, 1, "one provider")
+  const p = list[0]
+  assert.strictEqual(p.providerId, "opencodego")
+  assert.strictEqual(p.providerName, "OpenCode Go")
+  assert.strictEqual(p.source, "local")
+  assert.strictEqual(p.windows.length, 3)
+  assert.strictEqual(p.windows[0].title, "5-Hour")
+  assert.strictEqual(p.windows[1].title, "Weekly")
+  assert.strictEqual(p.windows[2].title, "Monthly")
+  assert.strictEqual(p.windows[0].percent, 0.058)
+  assert.strictEqual(p.windows[1].percent, 0.038)
+  assert.strictEqual(p.windows[2].percent, 0.059)
+  assert.strictEqual(p.headlinePercent, 0.059)
+  assert.strictEqual(p.windows[0].resetAt, "2026-08-03T18:08:59Z")
+  assert.strictEqual(p.hasData, true)
+  assert.strictEqual(p.error, "")
+}
+console.log("PASS: normalizes the real opencodego payload")
+
+// Fixture 2: error entries are kept but flagged, and dropped from valid list.
+const withErrors = [
+  { provider: "codex", source: "auto", error: { kind: "provider", code: 1, message: "auth required" } },
+  opencodego[0]
+]
+{
+  const all = model.normalizeProviders(withErrors)
+  assert.strictEqual(all.length, 2)
+  // Providers with data lead the list; errored providers trail behind.
+  assert.strictEqual(all[0].providerId, "opencodego")
+  const codex = all[1]
+  assert.strictEqual(codex.providerId, "codex")
+  assert.strictEqual(codex.error, "provider: auth required")
+  assert.strictEqual(codex.hasData, false)
+  assert.strictEqual(codex.windows.length, 0)
+  const valid = model.validProviders(withErrors)
+  assert.strictEqual(valid.length, 1)
+  assert.strictEqual(valid[0].providerId, "opencodego")
+}
+console.log("PASS: errors are isolated and valid providers are filtered")
+
+// Fixture 3: credits + identity + status surface on the record.
+const rich = [
+  {
+    provider: "claude",
+    source: "web",
+    usage: {
+      updatedAt: "2026-08-03T14:00:00Z",
+      primary: { usedPercent: 12, resetsAt: "2026-08-03T15:00:00Z", windowMinutes: 300 },
+      identity: { providerID: "claude", accountEmail: "user@example.com", loginMethod: "pro" }
+    },
+    credits: { remaining: 40, total: 50, plan: "Pro" },
+    status: { indicator: "none", description: "Operational" }
+  }
+]
+{
+  const p = model.normalizeProviders(rich)[0]
+  assert.strictEqual(p.providerName, "Claude")
+  assert.strictEqual(p.account, "user@example.com")
+  assert.strictEqual(p.plan, "pro")
+  assert.strictEqual(p.creditsRemaining, 40)
+  assert.strictEqual(p.creditsTotal, 50)
+  assert.strictEqual(p.statusIndicator, "")
+  assert.strictEqual(p.headlinePercent, 0.12)
+  assert.strictEqual(p.hasData, true)
+}
+console.log("PASS: credits, identity, and status are normalized")
+
+// Fixture 4: providers with no windows and no credits are not "valid".
+const empty = [{ provider: "wayfinder", source: "auto", error: { message: "gateway down" } }]
+{
+  assert.strictEqual(model.validProviders(empty).length, 0)
+  const p = model.normalizeProvider(empty[0])
+  assert.strictEqual(p.error, "gateway down")
+  assert.strictEqual(p.hasData, false)
+}
+console.log("PASS: providers without usable data stay out of the panel")
+
+// Fixture 5: unknown providers get a readable fallback name.
+{
+  assert.strictEqual(model.providerDisplayName("codex"), "Codex")
+  assert.strictEqual(model.providerDisplayName("opencodego"), "OpenCode Go")
+  assert.strictEqual(model.providerDisplayName("brand-new-provider"), "Brand New Provider")
+  assert.strictEqual(model.windowTitleForMinutes(300), "5-Hour")
+  assert.strictEqual(model.windowTitleForMinutes(10080), "Weekly")
+  assert.strictEqual(model.windowTitleForMinutes(43200), "Monthly")
+  assert.strictEqual(model.windowTitleForMinutes(1440), "1d")
+  assert.strictEqual(model.windowTitleForMinutes(60), "1h")
+  assert.strictEqual(model.windowTitleForMinutes(30), "30m")
+}
+console.log("PASS: provider names and window titles are human-readable")
+
+console.log("ALL MODEL TESTS PASS")
