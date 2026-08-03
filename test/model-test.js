@@ -112,4 +112,38 @@ console.log("PASS: providers without usable data stay out of the panel")
 }
 console.log("PASS: provider names and window titles are human-readable")
 
+// Fixture 6: cost daily buckets map to the day chart, and a merge can make a
+// tokens-only provider valid.
+{
+  const cost = model.normalizeCost({
+    provider: "codex", source: "local", historyDays: 30, updatedAt: "2026-08-03T14:40:38Z",
+    daily: [
+      { date: "2026-08-02", totalTokens: 125000, inputTokens: 50000, outputTokens: 75000 },
+      { date: "2026-08-01", totalTokens: 64000 }
+    ]
+  })
+  assert.strictEqual(cost.recentDays.length, 2)
+  assert.strictEqual(cost.recentDays[0].date, "2026-08-01")
+  assert.strictEqual(cost.recentDays[0].messageCount, 64000)
+  assert.strictEqual(cost.recentDays[1].date, "2026-08-02")
+  assert.strictEqual(cost.recentDays[1].messageCount, 125000)
+  assert.strictEqual(cost.updatedAt, "2026-08-03T14:40:38Z")
+
+  const tokenOnly = model.normalizeProvider({ provider: "brand-x", source: "local" })
+  assert.strictEqual(tokenOnly.hasData, false)
+  tokenOnly.recentDays = [{ date: "2026-08-03", messageCount: 100 }]
+  assert.strictEqual(model.filterValid([tokenOnly]).length, 1)
+  assert.strictEqual(model.filterValid([tokenOnly])[0].hasData, true)
+}
+console.log("PASS: daily token history merges and can earn a provider a seat")
+
+// Fixture 7: vendored brand marks resolve, unknown providers fall back.
+{
+  assert.strictEqual(model.providerIconBase("opencodego"), "opencodego")
+  assert.strictEqual(model.providerIconBase("codex"), "codex")
+  assert.strictEqual(model.providerIconBase("brand-new-provider"), "")
+  assert.strictEqual(model.normalizeProvider({ provider: "opencodego" }).iconBase, "opencodego")
+}
+console.log("PASS: provider icon bases map to vendored assets")
+
 console.log("ALL MODEL TESTS PASS")

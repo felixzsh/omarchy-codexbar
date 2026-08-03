@@ -89,6 +89,25 @@ function providerDisplayName(id) {
   return titleCase(id)
 }
 
+// Brand marks vendored under assets/icons/<id>.svg (dark variant) and
+// <id>-light.svg (light variant) from @lobehub/icons-static-svg. Providers
+// without a vendored mark fall back to an initials tile in the UI.
+var PROVIDER_ICONS = [
+  "codex", "openai", "azureopenai", "claude", "cursor", "opencode", "opencodego",
+  "alibaba", "alibabatokenplan", "gemini", "antigravity", "copilot", "devin",
+  "zai", "minimax", "manus", "kimi", "kilo", "kiro", "vertexai", "kimik2",
+  "moonshot", "ollama", "openrouter", "elevenlabs", "windsurf", "perplexity",
+  "mimo", "doubao", "mistral", "deepseek", "venice", "qoder", "stepfun",
+  "bedrock", "grok", "groq", "poe"
+]
+
+function providerIconBase(id) {
+  for (var i = 0; i < PROVIDER_ICONS.length; i++) {
+    if (PROVIDER_ICONS[i] === id) return id
+  }
+  return ""
+}
+
 // windowMinutes -> short human title. CodexBar's three canonical windows are
 // 300 (5h), 10080 (7d), and 43200 (30d); anything else gets a compact label.
 function windowTitleForMinutes(minutes) {
@@ -191,8 +210,6 @@ function normalizeProvider(raw) {
     if (windows[i].percent > headlinePercent) headlinePercent = windows[i].percent
   }
 
-  var hasData = !error && (windows.length > 0 || credits.remaining !== null)
-
   return {
     providerId: providerId,
     providerName: providerDisplayName(providerId),
@@ -206,11 +223,59 @@ function normalizeProvider(raw) {
     creditsTotal: credits.total,
     plan: identity.plan || credits.plan,
     account: identity.account,
+    iconBase: providerIconBase(providerId),
     statusIndicator: status.indicator,
     statusText: status.text,
     error: error ? (error.kind ? error.kind + ": " : "") + error.message : "",
-    hasData: hasData
+    // Populated by the /cost merge (codexbar-model.normalizeCost), never by
+    // guessing: empty until a provider actually reports token history.
+    recentDays: [],
+    dailyUpdatedAt: "",
+    hasData: providerHasData(error, windows.length, credits.remaining, [])
   }
+}
+
+// A provider earns a seat when it reports limits, credits, or a daily token
+// history. recentDays is checked live so a post-merge record can flip valid.
+function providerHasData(error, windowCount, creditsRemaining, recentDays) {
+  if (error) return false
+  return windowCount > 0 || creditsRemaining !== null || (recentDays && recentDays.length > 0)
+}
+
+// `codexbar cost` daily buckets -> the native widget's recentDays rows so the
+// panel can reuse the same day-chart rendering. totalTokens is what CodexBar
+// reports per day; there is no per-model token split, only per-model cost.
+function normalizeCost(raw) {
+  if (!raw || typeof raw !== "object") return { recentDays: [], updatedAt: "" }
+  var days = Array.isArray(raw.daily) ? raw.daily : []
+  var out = []
+  for (var i = 0; i < days.length; i++) {
+    var d = days[i] || {}
+    var date = cleanText(d.date)
+    if (date === "") continue
+    var tokens = Math.round(toNumber(d.totalTokens, 0))
+    if (tokens < 0) tokens = 0
+    out.push({ date: date, messageCount: tokens })
+  }
+  out.sort(function(a, b) { return a.date < b.date ? -1 : (a.date > b.date ? 1 : 0) })
+  return {
+    recentDays: out,
+    updatedAt: cleanText(raw.updatedAt)
+  }
+}
+
+// Filter already-normalized records (after a cost merge) down to the ones the
+// panel shows, recomputing validity so daily-only providers count.
+function filterValid(records) {
+  var out = []
+  if (!Array.isArray(records)) return out
+  for (var i = 0; i < records.length; i++) {
+    var p = records[i]
+    if (!p) continue
+    p.hasData = providerHasData(p.error, p.windows.length, p.creditsRemaining, p.recentDays)
+    if (p.hasData) out.push(p)
+  }
+  return out
 }
 
 // Sort so the providers running hottest lead the list; keep the order stable
@@ -242,9 +307,12 @@ function validProviders(rawList) {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     providerDisplayName: providerDisplayName,
+    providerIconBase: providerIconBase,
     windowTitleForMinutes: windowTitleForMinutes,
     normalizeProvider: normalizeProvider,
     normalizeProviders: normalizeProviders,
-    validProviders: validProviders
+    normalizeCost: normalizeCost,
+    validProviders: validProviders,
+    filterValid: filterValid
   }
 }
