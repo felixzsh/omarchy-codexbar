@@ -3,29 +3,37 @@ import Quickshell
 import Quickshell.Io
 import "providers/codexbar-model.js" as Cbx
 
-// Talks to `codexbar serve` and turns its per-provider payloads into the
-// normalized records the panel renders. All usage computation is delegated to
-// CodexBar; this file only polls, parses, and filters.
+// Talks to the codexbar CLI directly (no `codexbar serve` daemon needed) and
+// turns its per-provider payloads into the normalized records the panel
+// renders. Usage is polled on a background timer so the bar icon stays fresh;
+// cost history (the heavier local scan) is fetched when the panel opens.
 Item {
   id: root
   visible: false
 
   property var settings: ({})
 
-  property string serverUrl: String(setting("codexbarUrl", "http://127.0.0.1:8080")).trim()
+  property string codexbarBin: {
+    var v = String(setting("codexbarBin", "codexbar")).trim()
+    return v === "" ? "codexbar" : v
+  }
   property int refreshIntervalSec: Math.max(30, Number(setting("refreshIntervalSec", 120)))
 
   property bool refreshing: false
-  property bool serverOnline: false
-  property string serverVersion: ""
+  property bool costRefreshing: false
+  property string codexbarVersion: ""
   property string usageStatusText: ""
   property string lastError: ""
   property double lastRefreshedAtMs: 0
+  property double lastCostRefreshedAtMs: 0
 
   // Every provider CodexBar returned (valid ones first, errors trailing) and
   // the strict subset the panel shows.
   property var allProviders: []
   property var validProviders: []
+  property var _costMap: ({})
+  property bool _usageHandled: false
+  property bool _costHandled: false
   property int revision: 0
 
   function setting(name, fallback) {
@@ -34,6 +42,7 @@ Item {
   }
 
   Timer {
+    id: usageTimer
     interval: root.refreshIntervalSec * 1000
     running: true
     repeat: true
@@ -41,86 +50,168 @@ Item {
     onTriggered: root.refresh()
   }
 
-  function fetchJson(url, onDone) {
-    var xhr = new XMLHttpRequest()
-    xhr.open("GET", url, true)
-    xhr.onreadystatechange = function() {
-      if (xhr.readyState !== XMLHttpRequest.DONE) return
-      var ok = xhr.status >= 200 && xhr.status < 300
-      var data = null
-      var raw = xhr.responseText || ""
-      if (ok && raw !== "") {
-        try { data = JSON.parse(raw) } catch (e) { data = null }
-      }
-      onDone(ok, data, xhr.status, raw)
+  // ---------------------------------------------------------------- usage
+
+  Process {
+    id: usageProc
+    running: false
+    onExited: root.onUsageExited(exitCode)
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root.onUsageOutput(text)
     }
-    xhr.send()
+    stderr: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: function(text) {
+        var t = String(text || "").trim()
+        if (t !== "") console.warn("codexbar/usage", t)
+      }
+    }
+  }
+
+  function usageCommand() {
+    return [root.codexbarBin, "usage", "--format", "json", "--web-timeout", "15"]
   }
 
   function refresh(force) {
-    if (root.refreshing) return
+    if (usageProc.running) return
+    root._usageHandled = false
     root.refreshing = true
-    var base = []
-    var costMap = {}
-    var usageLoaded = false
-    var costLoaded = false
-
-    function finish() {
-      if (!usageLoaded || !costLoaded) return
-      // Attach the per-day token history CodexBar reports (codex/claude local
-      // logs) to the matching provider; everyone else keeps an empty chart.
-      for (var i = 0; i < base.length; i++) {
-        var cost = costMap[base[i].providerId]
-        if (cost) {
-          base[i].recentDays = cost.recentDays
-          base[i].dailyUpdatedAt = cost.updatedAt
-        }
-      }
-      root.refreshing = false
-      root.lastRefreshedAtMs = Date.now()
-      root.allProviders = base
-      root.validProviders = Cbx.filterValid(base)
-      root.revision++
-    }
-
-    root.fetchJson(root.serverUrl + "/usage?provider=all", function(ok, data, status) {
-      usageLoaded = true
-      if (!ok) {
-        root.serverOnline = false
-        root.serverVersion = ""
-        root.lastError = status === 0
-          ? "CodexBar server not reachable at " + root.serverUrl + ". Run `codexbar serve`."
-          : "CodexBar server returned HTTP " + status + "."
-        root.usageStatusText = root.lastError
-      } else {
-        root.serverOnline = true
-        root.lastError = ""
-        root.usageStatusText = ""
-        base = Cbx.normalizeProviders(data || [])
-      }
-      finish()
-    })
-
-    root.fetchJson(root.serverUrl + "/cost?provider=all", function(ok, data) {
-      costLoaded = true
-      if (ok && Array.isArray(data)) {
-        for (var i = 0; i < data.length; i++) {
-          var rec = data[i]
-          if (!rec || !rec.provider || rec.error) continue
-          costMap[String(rec.provider)] = Cbx.normalizeCost(rec)
-        }
-      }
-      finish()
-    })
-
-    // Best-effort version badge; a failure here never masks a good usage read.
-    root.fetchJson(root.serverUrl + "/health", function(ok, health) {
-      if (ok && health && health.version) root.serverVersion = String(health.version)
-    })
+    usageProc.command = root.usageCommand()
+    usageProc.running = true
   }
 
   function refreshAll(force) { refresh(force) }
   function refreshLimits() { refresh() }
+
+  // Fetch usage now and restart the background countdown (used on panel open).
+  function pollNow() {
+    root.refresh()
+    usageTimer.restart()
+  }
+
+  function onUsageOutput(text) {
+    root._usageHandled = true
+    root.refreshing = false
+    var data = root.parseJsonOutput(text)
+    if (data === null) {
+      root.lastError = "CodexBar returned no parseable usage. Run `" + root.codexbarBin + " usage --format json` to check."
+      root.usageStatusText = root.lastError
+      root.allProviders = []
+      root.validProviders = []
+      root.revision++
+      return
+    }
+    root.lastError = ""
+    root.usageStatusText = ""
+    root.lastRefreshedAtMs = Date.now()
+    root.allProviders = Cbx.normalizeProviders(data)
+    root.mergeCost()
+    root.revision++
+  }
+
+  function onUsageExited(exitCode) {
+    if (root._usageHandled) return
+    root.refreshing = false
+    root.allProviders = []
+    root.validProviders = []
+    root.lastError = "CodexBar failed to run (exit " + exitCode + "). Is `" + root.codexbarBin + "` on PATH?"
+    root.usageStatusText = root.lastError
+    root.revision++
+  }
+
+  // ---------------------------------------------------------------- cost
+
+  Process {
+    id: costProc
+    running: false
+    onExited: root.onCostExited(exitCode)
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root.onCostOutput(text)
+    }
+    stderr: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: function(text) {
+        var t = String(text || "").trim()
+        if (t !== "") console.warn("codexbar/cost", t)
+      }
+    }
+  }
+
+  function refreshCost() {
+    if (costProc.running) return
+    root._costHandled = false
+    root.costRefreshing = true
+    costProc.command = [root.codexbarBin, "cost", "--format", "json"]
+    costProc.running = true
+  }
+
+  function onCostOutput(text) {
+    root._costHandled = true
+    root.costRefreshing = false
+    root.lastCostRefreshedAtMs = Date.now()
+    var data = root.parseJsonOutput(text)
+    var map = {}
+    if (Array.isArray(data)) {
+      for (var i = 0; i < data.length; i++) {
+        var rec = data[i]
+        if (!rec || !rec.provider || rec.error) continue
+        map[String(rec.provider)] = Cbx.normalizeCost(rec)
+      }
+    }
+    root._costMap = map
+    root.mergeCost()
+  }
+
+  function onCostExited(exitCode) {
+    if (root._costHandled) return
+    root.costRefreshing = false
+  }
+
+  // Re-apply the latest daily token history onto the current provider records.
+  function mergeCost() {
+    for (var i = 0; i < root.allProviders.length; i++) {
+      var cost = root._costMap[root.allProviders[i].providerId]
+      if (cost) {
+        root.allProviders[i].recentDays = cost.recentDays
+        root.allProviders[i].dailyUpdatedAt = cost.updatedAt
+      }
+    }
+    root.validProviders = Cbx.filterValid(root.allProviders)
+  }
+
+  // ---------------------------------------------------------------- misc
+
+  Process {
+    id: versionProc
+    running: false
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: function(text) {
+        var v = String(text || "").trim().split("\n")[0]
+        if (v !== "") root.codexbarVersion = v
+      }
+    }
+  }
+
+  Component.onCompleted: {
+    versionProc.command = [root.codexbarBin, "--version"]
+    versionProc.running = true
+  }
+
+  function parseJsonOutput(text) {
+    var raw = String(text || "").trim()
+    if (raw === "") return null
+    try { return JSON.parse(raw) } catch (e) {}
+    var lines = raw.split("\n")
+    for (var i = lines.length - 1; i >= 0; i--) {
+      var line = lines[i].trim()
+      if (line === "") continue
+      try { return JSON.parse(line) } catch (e2) {}
+    }
+    return null
+  }
 
   function formatTokenCount(n) {
     if (n === undefined || n === null) return "0"
@@ -141,15 +232,16 @@ Item {
         source: p.source,
         headlinePercent: p.headlinePercent,
         creditsRemaining: p.creditsRemaining,
-        windows: p.windows
+        windows: p.windows,
+        hasDailyTokens: p.recentDays && p.recentDays.length > 0
       })
     }
     return {
       module: "local.codexbar",
-      serverUrl: root.serverUrl,
-      serverOnline: root.serverOnline,
-      serverVersion: root.serverVersion,
+      codexbarBin: root.codexbarBin,
+      codexbarVersion: root.codexbarVersion,
       refreshing: root.refreshing,
+      costRefreshing: root.costRefreshing,
       updatedAt: new Date(root.lastRefreshedAtMs).toISOString(),
       providers: providers,
       usageStatusText: root.usageStatusText
