@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "local.codexbar",
+  "name": "CodexBar",
+  "version": "0.1.0",
+  "author": "felixzsh",
+  "license": "MIT",
+  "description": "Every AI coding limit in one Omarchy panel, powered by the CodexBar CLI.",
+  "kinds": ["bar-widget"],
+  "activation": "on-demand",
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "CodexBar",
+    "description": "One bar icon and one panel that reads usage, limits, credits, and resets for every AI provider CodexBar tracks — Codex, Claude, OpenCode Go, Gemini, Copilot, and more.",
+    "category": "AI",
+    "aliases": ["codexbar-usage", "ai-usage"],
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "codexbarUrl": "http://127.0.0.1:8080",
+      "refreshIntervalSec": 120
+    },
+    "schema": [
+      { "key": "codexbarUrl", "type": "string", "label": "CodexBar server URL", "defaultValue": "http://127.0.0.1:8080", "description": "The `codexbar serve` endpoint. Start it with `codexbar serve --port 8080`." },
+      { "key": "refreshIntervalSec", "type": "integer", "label": "Refresh interval (seconds)", "min": 30, "max": 3600, "step": 30, "defaultValue": 120 }
+    ]
+  }
+}
