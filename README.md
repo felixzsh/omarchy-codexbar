@@ -9,14 +9,12 @@ The widget is a thin **wrapper around [CodexBar](https://github.com/steipete/Cod
 All provider logic — authentication, cookies, workspace lookup, quota parsing,
 and refresh — is delegated to the `codexbar` CLI. The plugin runs
 `codexbar usage` and `codexbar cost` directly via `Process` (no `codexbar serve`
-daemon, no port), normalizes the payloads, and renders a panel in the native
+daemon), normalizes the payloads, and renders a panel in the native
 Model Usage style. It never reads provider databases or guesses usage itself.
 
 ## Requirements
 
-- `codexbar-cli` on `PATH` (Arch: `yay -S codexbar-cli`; other Linux: release
-  tarballs from the [CodexBar releases](https://github.com/steipete/CodexBar/releases)).
-  No server to run — the plugin calls `codexbar` itself.
+- `codexbar-cli` on `PATH` (Arch: `yay -S codexbar-cli`)
 - Providers enabled in CodexBar's config (`codexbar config providers`,
   Settings, or `codexbar config enable --provider <id>`). On Linux, browser
   cookie sources are macOS-only; use API keys, local CLIs, or manual cookies
@@ -55,7 +53,7 @@ Providers with no usable data are excluded from the panel and the selector.
 - Bar icon: left = panel, right = refresh.
 - Panel: `j`/`k` scroll, `r` or Enter refresh, Tab moves to the neighboring bar
   panel, Esc closes.
-- IPC: `omarchy-shell local.codexbar <open|close|toggle|refresh|status>`.
+- IPC: `omarchy shell local.codexbar <open|close|toggle|refresh|status>`.
   `status` returns a JSON snapshot of the server, the widget state, and every
   valid provider — the first thing to check when the widget does not show up.
 
@@ -75,7 +73,7 @@ omarchy bar set local.codexbar codexbarBin /usr/bin/codexbar --json
 ## Troubleshooting
 
 ```bash
-omarchy-shell local.codexbar status   # binary, version, widget + providers at a glance
+omarchy shell local.codexbar status   # binary, version, widget + providers at a glance
 ```
 
 - `usageStatusText` says `failed to run (exit N)` — the `codexbar` binary was not
@@ -91,7 +89,7 @@ The shell caches compiled plugin QML, so after updating the plugin code the
 widget can keep running the old version until the shell restarts:
 
 ```bash
-omarchy-restart-shell
+omarchy restart shell
 ```
 
 The widget coexists with the native Model Usage widget; they have independent
