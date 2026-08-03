@@ -8,8 +8,9 @@ native Model Usage widget.
 The widget is a thin **wrapper around [CodexBar](https://github.com/steipete/CodexBar)**.
 All provider logic — authentication, cookies, workspace lookup, quota parsing,
 and refresh — is delegated to `codexbar serve`. The plugin only polls its JSON
-endpoint, normalizes it, and renders a generic dashboard. It never reads
-provider databases or guesses usage itself.
+endpoints (`/usage` and `/cost`), normalizes the payloads, and renders a panel
+in the native Model Usage style. It never reads provider databases or guesses
+usage itself.
 
 ## Requirements
 
@@ -37,17 +38,20 @@ omarchy plugin add https://github.com/felixzsh/omarchy-codexbar.git --enable
 
 ## What it shows
 
-- **One card per provider** that currently reports usable data.
-- Each card lists its **windows** (e.g. 5-Hour, Weekly, Monthly) as a meter
-  with the percentage used and a "resets in X" countdown.
-- **Credits / balance** when the provider exposes them.
-- The **source** that produced the numbers (local, web, api, …) and the
-  account or plan when known.
-- Providers with no usable data are **excluded** from the panel; they do not
-  clutter the list.
+The panel mirrors the native Model Usage widget's layout:
 
-Everything is read from `GET /usage?provider=all` on the CodexBar server.
-Percentages and reset times are CodexBar's, not recomputed.
+- **Hero** per provider — brand mark, plan, source, and a **dropdown selector**
+  on the right to switch between every provider that reports usable data.
+- **Limits** — the provider's windows (5-Hour, Weekly, Monthly) as meters with
+  the percentage used and a "resets in X" countdown.
+- **Credits** — balance when the provider exposes one.
+- **Tokens by day** — only when CodexBar reports a daily token history. That
+  history comes from `codexbar cost` (local Codex/Claude logs); providers
+  without it simply hide the section. There is no per-model token split in
+  CodexBar, so that chart is not shown.
+
+Percentages, reset times, and token counts are CodexBar's, never recomputed.
+Providers with no usable data are excluded from the panel and the selector.
 
 ## Interactions
 
