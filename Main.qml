@@ -1,7 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import "providers/codexbar-model.js" as Cbx
+import "codexbar.js" as Cbx
 
 // Talks to the codexbar CLI directly (no `codexbar serve` daemon needed) and
 // turns its per-provider payloads into the normalized records the panel

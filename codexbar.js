@@ -1,6 +1,6 @@
 // Pure normalization of `codexbar serve` payloads into the flat provider
 // records the panel renders. Kept free of QML and module systems so it runs
-// both as a QML JS library (`import "codexbar-model.js" as Cbx`) and under
+// both as a QML JS library (`import "codexbar.js" as Cbx`) and under
 // Node for the fixture tests.
 
 var PROVIDER_NAMES = {
@@ -231,7 +231,7 @@ function normalizeProvider(raw) {
     statusIndicator: status.indicator,
     statusText: status.text,
     error: error ? (error.kind ? error.kind + ": " : "") + error.message : "",
-    // Populated by the /cost merge (codexbar-model.normalizeCost), never by
+    // Populated by the /cost merge (codexbar.js normalizeCost), never by
     // guessing: empty until a provider actually reports token history.
     recentDays: [],
     dailyUpdatedAt: "",

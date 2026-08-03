@@ -3,7 +3,7 @@
 
 const assert = require("assert")
 const path = require("path")
-const model = require(path.join(__dirname, "..", "providers", "codexbar-model.js"))
+const model = require(path.join(__dirname, "..", "codexbar.js"))
 
 // Fixture 1: the real opencodego payload captured from `codexbar serve`.
 const opencodego = [
