@@ -4,6 +4,7 @@ import Quickshell
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
+import "components"
 
 // CodexBar widget: one bar icon and one panel that mirrors the native Model
 // Usage widget's look. Usage, limits, credits, and resets are read straight
@@ -373,7 +374,7 @@ Panel {
             }
 
             trailingControl: Component {
-              Dropdown {
+              ProviderDropdown {
                 width: Math.min(Style.spacing.dropdownWidth, Style.space(180))
                 showLabel: false
                 fontFamily: root.fontFamily
