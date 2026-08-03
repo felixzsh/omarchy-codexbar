@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import qs.Commons
+import qs.Ui
 
 // Vendored copy of Omarchy's Ui/Dropdown.qml with one behavioral change: the
 // popup's closePolicy drops CloseOnPressOutside so a press on the trigger
