@@ -185,6 +185,7 @@ Item {
 
   Process {
     id: versionProc
+    command: [root.codexbarBin, "--version"]
     running: false
     stdout: StdioCollector {
       waitForEnd: true
@@ -195,9 +196,12 @@ Item {
     }
   }
 
-  Component.onCompleted: {
-    versionProc.command = [root.codexbarBin, "--version"]
-    versionProc.running = true
+  // Grab the version once, a beat after the component tree is settled.
+  Timer {
+    interval: 1000
+    running: true
+    repeat: false
+    onTriggered: versionProc.running = true
   }
 
   function parseJsonOutput(text) {
