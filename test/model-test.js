@@ -27,7 +27,7 @@ const opencodego = [
   assert.strictEqual(p.providerName, "OpenCode Go")
   assert.strictEqual(p.source, "local")
   assert.strictEqual(p.windows.length, 3)
-  assert.strictEqual(p.windows[0].title, "5-Hour")
+  assert.strictEqual(p.windows[0].title, "Session")
   assert.strictEqual(p.windows[1].title, "Weekly")
   assert.strictEqual(p.windows[2].title, "Monthly")
   assert.strictEqual(p.windows[0].percent, 0.058)

@@ -140,7 +140,11 @@ function normalizeWindows(usage) {
   var order = ["primary", "secondary", "tertiary"]
   for (var i = 0; i < order.length; i++) {
     var w = normalizeWindow(usage[order[i]])
-    if (w && w.percent >= 0) out.push(w)
+    if (!w || w.percent < 0) continue
+    // The primary window is a session limit whose length varies by provider,
+    // so it keeps one stable label instead of a duration that only fits some.
+    if (order[i] === "primary") w.title = "Session"
+    out.push(w)
   }
   return out
 }
