@@ -36,6 +36,7 @@ Item {
   property double _costSpawnedAtMs: 0
   property bool _usageTimedOut: false
   property bool _costTimedOut: false
+  property bool _usageExitHandled: false
 
   // Every provider CodexBar returned (valid ones first, errors trailing) and
   // the strict subset the panel shows.
@@ -99,6 +100,7 @@ Item {
     id: usageProc
     running: false
     onExited: root.onUsageExited(exitCode)
+    onRunningChanged: root.onUsageRunningChanged()
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: root.onUsageOutput(text)
@@ -165,8 +167,29 @@ Item {
     root.revision++
   }
 
+  // Quickshell's Process only surfaces a failed-to-start through runningChanged
+  // (no error signal and no `exited`): the run stops without output or exit,
+  // so onUsageRunningChanged reports it. A normal exit is handled by
+  // onUsageExited first, which sets _usageExitHandled to swallow the pair.
+  function onUsageRunningChanged() {
+    if (usageProc.running) return
+    if (root._usageHandled) return
+    if (root._usageExitHandled) {
+      root._usageExitHandled = false
+      return
+    }
+    root.refreshing = false
+    root._usageSpawnedAtMs = 0
+    root.allProviders = []
+    root.validProviders = []
+    root.lastError = "CodexBar failed to start. Is `" + root.codexbarBin + "` on PATH?"
+    root.usageStatusText = root.lastError
+    root.revision++
+  }
+
   function onUsageExited(exitCode) {
     if (root._usageHandled) return
+    root._usageExitHandled = true
     root.refreshing = false
     root._usageSpawnedAtMs = 0
     if (root._usageTimedOut) {
@@ -190,6 +213,7 @@ Item {
     id: costProc
     running: false
     onExited: root.onCostExited(exitCode)
+    onRunningChanged: root.onCostRunningChanged()
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: root.onCostOutput(text)
@@ -236,6 +260,14 @@ Item {
     }
     root._costMap = map
     root.mergeCost()
+  }
+
+  function onCostRunningChanged() {
+    if (costProc.running) return
+    if (root._costHandled) return
+    root.costRefreshing = false
+    root._costSpawnedAtMs = 0
+    root._costTimedOut = false
   }
 
   function onCostExited(exitCode) {
