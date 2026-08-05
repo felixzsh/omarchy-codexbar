@@ -15,12 +15,9 @@ Model Usage style. It never reads provider databases or guesses usage itself.
 ## Requirements
 
 - `codexbar-cli` on `PATH` (Arch: `yay -S codexbar-cli`)
-- Providers enabled in CodexBar's config (`codexbar config providers`,
-  Settings, or `codexbar config enable --provider <id>`). On Linux, browser
-  cookie sources are macOS-only; use API keys, local CLIs, or manual cookies
-  where a provider supports them. See the
-  [CodexBar OpenCode doc](https://github.com/steipete/CodexBar/blob/main/docs/opencode.md)
-  for the OpenCode Go `cookieHeader` setup if you want web-sourced usage.
+- Each provider you want to track must be configured in CodexBar itself. How
+  that is done depends on the provider, so follow the
+  [CodexBar configuration docs](https://github.com/steipete/CodexBar/blob/main/docs/configuration.md).
 
 ## Install
 
