@@ -27,6 +27,16 @@ Item {
   property double lastRefreshedAtMs: 0
   property double lastCostRefreshedAtMs: 0
 
+  // Watchdog bookkeeping: the codexbar CLI has been observed to hang on some
+  // web fetches regardless of --web-timeout, so every spawned run is killed
+  // after a hard deadline instead of blocking the poll loop forever.
+  property int _usageTimeoutMs: 30000
+  property int _costTimeoutMs: 60000
+  property double _usageSpawnedAtMs: 0
+  property double _costSpawnedAtMs: 0
+  property bool _usageTimedOut: false
+  property bool _costTimedOut: false
+
   // Every provider CodexBar returned (valid ones first, errors trailing) and
   // the strict subset the panel shows.
   property var allProviders: []
@@ -48,6 +58,39 @@ Item {
     repeat: true
     triggeredOnStart: true
     onTriggered: root.refresh()
+  }
+
+  // Force-kills a wedged codexbar process so refresh() can never be blocked
+  // forever by a run that refuses to finish.
+  Timer {
+    id: watchdogTimer
+    interval: 5000
+    running: true
+    repeat: true
+    onTriggered: root.checkWatchdog()
+  }
+
+  // After a watchdog kill, retry once shortly after so the panel recovers
+  // without waiting for the next poll interval.
+  Timer {
+    id: usageRetryTimer
+    interval: 3000
+    running: false
+    repeat: false
+    onTriggered: root.refresh()
+  }
+
+  function checkWatchdog() {
+    if (usageProc.running && root._usageSpawnedAtMs > 0
+        && Date.now() - root._usageSpawnedAtMs > root._usageTimeoutMs) {
+      root._usageTimedOut = true
+      usageProc.signal(9)
+    }
+    if (costProc.running && root._costSpawnedAtMs > 0
+        && Date.now() - root._costSpawnedAtMs > root._costTimeoutMs) {
+      root._costTimedOut = true
+      costProc.signal(9)
+    }
   }
 
   // ---------------------------------------------------------------- usage
@@ -74,9 +117,19 @@ Item {
   }
 
   function refresh(force) {
-    if (usageProc.running) return
+    if (usageProc.running) {
+      // A wedged process would freeze the whole poll loop; kill it so the
+      // exit handler can clear state and a retry can start a fresh run.
+      if (root._usageSpawnedAtMs > 0 && Date.now() - root._usageSpawnedAtMs > root._usageTimeoutMs) {
+        root._usageTimedOut = true
+        usageProc.signal(9)
+      }
+      return
+    }
     root._usageHandled = false
+    root._usageTimedOut = false
     root.refreshing = true
+    root._usageSpawnedAtMs = Date.now()
     usageProc.command = root.usageCommand()
     usageProc.running = true
   }
@@ -92,6 +145,8 @@ Item {
 
   function onUsageOutput(text) {
     root._usageHandled = true
+    root._usageTimedOut = false
+    root._usageSpawnedAtMs = 0
     root.refreshing = false
     var data = root.parseJsonOutput(text)
     if (data === null) {
@@ -113,6 +168,15 @@ Item {
   function onUsageExited(exitCode) {
     if (root._usageHandled) return
     root.refreshing = false
+    root._usageSpawnedAtMs = 0
+    if (root._usageTimedOut) {
+      root._usageTimedOut = false
+      root.usageStatusText = "CodexBar usage timed out and was killed after "
+        + Math.round(root._usageTimeoutMs / 1000) + "s. Retrying in a moment."
+      root.revision++
+      usageRetryTimer.start()
+      return
+    }
     root.allProviders = []
     root.validProviders = []
     root.lastError = "CodexBar failed to run (exit " + exitCode + "). Is `" + root.codexbarBin + "` on PATH?"
@@ -140,15 +204,25 @@ Item {
   }
 
   function refreshCost() {
-    if (costProc.running) return
+    if (costProc.running) {
+      if (root._costSpawnedAtMs > 0 && Date.now() - root._costSpawnedAtMs > root._costTimeoutMs) {
+        root._costTimedOut = true
+        costProc.signal(9)
+      }
+      return
+    }
     root._costHandled = false
+    root._costTimedOut = false
     root.costRefreshing = true
+    root._costSpawnedAtMs = Date.now()
     costProc.command = [root.codexbarBin, "cost", "--format", "json"]
     costProc.running = true
   }
 
   function onCostOutput(text) {
     root._costHandled = true
+    root._costTimedOut = false
+    root._costSpawnedAtMs = 0
     root.costRefreshing = false
     root.lastCostRefreshedAtMs = Date.now()
     var data = root.parseJsonOutput(text)
@@ -167,6 +241,8 @@ Item {
   function onCostExited(exitCode) {
     if (root._costHandled) return
     root.costRefreshing = false
+    root._costSpawnedAtMs = 0
+    root._costTimedOut = false
   }
 
   // Re-apply the latest daily token history onto the current provider records.
