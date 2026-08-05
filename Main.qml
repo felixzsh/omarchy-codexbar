@@ -325,6 +325,10 @@ Item {
     return null
   }
 
+  function isStalled() {
+    return root.lastRefreshedAtMs > 0 && Date.now() - root.lastRefreshedAtMs > 3 * root.refreshIntervalSec * 1000
+  }
+
   function formatTokenCount(n) {
     if (n === undefined || n === null) return "0"
     if (n >= 1e9) return (n / 1e9).toFixed(1) + "B"
@@ -354,6 +358,7 @@ Item {
       codexbarVersion: root.codexbarVersion,
       refreshing: root.refreshing,
       costRefreshing: root.costRefreshing,
+      stalled: root.isStalled(),
       updatedAt: new Date(root.lastRefreshedAtMs).toISOString(),
       providers: providers,
       usageStatusText: root.usageStatusText

@@ -211,6 +211,7 @@ Panel {
 
   function updatedText() {
     var when = "updated " + root.timeAgo(usage.lastRefreshedAtMs)
+    if (usage.isStalled()) when += " · stalled"
     if (usage.codexbarVersion !== "") return "CodexBar " + usage.codexbarVersion + " · " + when
     return when
   }
