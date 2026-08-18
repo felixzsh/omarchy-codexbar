@@ -589,6 +589,25 @@ Panel {
       font.family: root.fontFamily
       font.pixelSize: Style.font.caption
     }
+
+    // CodexBar's pace forecast: how far the window is expected to be used at
+    // the current burn rate, and whether it lasts to the reset.
+    Text {
+      visible: limitRow.window && limitRow.window.pace
+      width: parent.width
+      text: {
+        var pc = limitRow.window.pace
+        if (!pc) return ""
+        var parts = ["At this pace"]
+        if (pc.expectedPercent >= 0)
+          parts.push("~" + Math.round(pc.expectedPercent * 100) + "% used")
+        parts.push(pc.willLastToReset ? "lasts until reset" : "runs out before reset")
+        return parts.join(" · ")
+      }
+      color: limitRow.window && limitRow.window.pace && !limitRow.window.pace.willLastToReset ? root.urgent : root.dim
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.caption
+    }
   }
 
   // Rounded track showing the percentage of the allowance used.
