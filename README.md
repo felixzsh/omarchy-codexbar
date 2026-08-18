@@ -35,8 +35,11 @@ The panel mirrors the native Model Usage widget's layout:
 - **Hero** per provider — brand mark, plan, source, and a **dropdown selector**
   on the right to switch between every provider that reports usable data.
 - **Limits** — the provider's windows (5-Hour, Weekly, Monthly) as meters with
-  the percentage used and a "resets in X" countdown.
-- **Credits** — balance when the provider exposes one.
+  the percentage used and a "resets in X" countdown. When CodexBar reports a
+  **pace** forecast, each row also shows how far the window is expected to be
+  used at the current burn rate and whether it lasts until reset.
+- **Credits** — balance when the provider exposes one. CodexBar 0.53 reports
+  spend as `usage.providerCost`; a positive limit becomes a credit balance.
 - **Tokens by day** — only when CodexBar reports a daily token history. That
   history comes from `codexbar cost` (local Codex/Claude logs); providers
   without it simply hide the section. There is no per-model token split in
@@ -66,6 +69,7 @@ omarchy bar set local.codexbar codexbarBin /usr/bin/codexbar --json
 |---|---|---|
 | `codexbarBin` | `codexbar` | Command name or path to the codexbar CLI |
 | `refreshIntervalSec` | `120` | Background poll interval for usage (opens the panel to force a fetch) |
+| `devMock` | `false` | **Dev only.** Appends one curated mock provider that exercises every renderable field (limits, pace, credits, daily tokens), so a maintainer can preview the full UI without real provider access. Off by default; end users never see it. |
 
 ## Troubleshooting
 
