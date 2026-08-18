@@ -19,6 +19,12 @@ Item {
   }
   property int refreshIntervalSec: Math.max(30, Number(setting("refreshIntervalSec", 120)))
 
+  // Dev-only: when true, a curated mock provider (one that exercises every
+  // field the panel can render) is appended to the provider list so a
+  // maintainer can preview the full UI without access to a real provider.
+  // Defaults to off; end users never see it unless they set it explicitly.
+  property bool devMock: setting("devMock", false) === true
+
   property bool refreshing: false
   property bool costRefreshing: false
   property string codexbarVersion: ""
@@ -163,6 +169,12 @@ Item {
     root.usageStatusText = ""
     root.lastRefreshedAtMs = Date.now()
     root.allProviders = Cbx.normalizeProviders(data)
+    if (root.devMock) {
+      // Mock always trails real providers so the dev can pick it from the
+      // dropdown alongside live ones. Real records win the headline sort.
+      var mock = Cbx.mockProviderList()
+      for (var mi = 0; mi < mock.length; mi++) root.allProviders.push(mock[mi])
+    }
     root.mergeCost()
     root.revision++
   }
