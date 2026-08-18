@@ -146,4 +146,80 @@ console.log("PASS: daily token history merges and can earn a provider a seat")
 }
 console.log("PASS: provider icon bases map to vendored assets")
 
+// Fixture 8: the 0.53 schema — `pace` forecasts and `usage.providerCost`
+// replace the old top-level `credits`.
+const newSchema = [
+  {
+    provider: "opencodego",
+    source: "web",
+    usage: {
+      updatedAt: "2026-08-18T23:26:41Z",
+      primary: { usedPercent: 8, resetsAt: "2026-08-18T23:30:56Z", windowMinutes: 300 },
+      secondary: { usedPercent: 25, resetsAt: "2026-08-23T23:59:59Z", windowMinutes: 10080 },
+      tertiary: { usedPercent: 54, resetsAt: "2026-08-27T01:24:05Z", windowMinutes: 43200 },
+      providerCost: { currencyCode: "USD", period: "Zen balance", used: 8.5, limit: 0, updatedAt: "2026-08-18T23:26:41Z" }
+    },
+    pace: {
+      primary: { expectedUsedPercent: 99, deltaPercent: -91, stage: "farBehind", willLastToReset: true, summary: "91% in reserve | Expected 99% used | Lasts until reset" },
+      secondary: { expectedUsedPercent: 28, deltaPercent: -3, stage: "slightlyBehind", willLastToReset: true, summary: "3% in reserve | Expected 28% used | Lasts until reset" },
+      tertiary: { expectedUsedPercent: 74, deltaPercent: -20, stage: "farBehind", willLastToReset: true, summary: "20% in reserve | Expected 74% used | Lasts until reset" }
+    }
+  }
+]
+{
+  const p = model.normalizeProviders(newSchema)[0]
+  assert.strictEqual(p.windows.length, 3)
+  assert.strictEqual(p.windows[0].pace.stage, "farBehind")
+  assert.strictEqual(p.windows[0].pace.expectedPercent, 0.99)
+  assert.strictEqual(p.windows[0].pace.willLastToReset, true)
+  assert.strictEqual(p.windows[2].pace.stage, "farBehind")
+  assert.strictEqual(p.windows[2].pace.willLastToReset, true)
+  // A zero providerCost limit is spend, not a credit pool -> no balance shown.
+  assert.strictEqual(p.creditsRemaining, null)
+  assert.strictEqual(p.creditsTotal, null)
+}
+console.log("PASS: 0.53 pace forecasts normalize per window")
+
+// Fixture 9: providerCost with a positive limit becomes a credit balance.
+{
+  const p = model.normalizeProvider({
+    provider: "claude", source: "web",
+    usage: { providerCost: { currencyCode: "USD", period: "Pro", used: 18.5, limit: 50, updatedAt: "2026-08-18T23:00:00Z" } }
+  })
+  assert.strictEqual(p.creditsRemaining, 31.5)
+  assert.strictEqual(p.creditsUsed, 18.5)
+  assert.strictEqual(p.creditsTotal, 50)
+  assert.strictEqual(p.plan, "Pro")
+}
+console.log("PASS: providerCost with a positive limit maps to credits")
+
+// Fixture 10: renamed provider ids keep pretty names and vendored icons.
+{
+  assert.strictEqual(model.providerDisplayName("groqcloud"), "GroqCloud")
+  assert.strictEqual(model.providerIconBase("groqcloud"), "groq")
+  assert.strictEqual(model.providerDisplayName("azure-openai"), "Azure OpenAI")
+  assert.strictEqual(model.providerIconBase("azure-openai"), "azureopenai")
+  assert.strictEqual(model.providerDisplayName("alibaba-coding-plan"), "Alibaba Coding Plan")
+  assert.strictEqual(model.providerIconBase("alibaba-coding-plan"), "alibaba")
+  assert.strictEqual(model.providerDisplayName("qwen-cloud"), "Qwen Cloud")
+  assert.strictEqual(model.providerIconBase("qwen-cloud"), "")
+}
+console.log("PASS: renamed and new provider ids are human-readable")
+
+// Fixture 11: the dev mock covers every renderable field and stays valid.
+{
+  const mock = model.mockProviderList()
+  assert.strictEqual(mock.length, 1)
+  const p = mock[0]
+  assert.strictEqual(p.providerId, "mock")
+  assert.strictEqual(p.hasData, true)
+  assert.strictEqual(p.windows.length, 3)
+  assert.ok(p.windows.every(function(w) { return w.pace }), "every mock window carries pace")
+  assert.strictEqual(p.creditsRemaining, 31.5)
+  assert.ok(p.recentDays.length > 0, "mock carries daily token history")
+  assert.strictEqual(p.account, "dev@example.com")
+  assert.ok(p.windows.some(function(w) { return !w.pace.willLastToReset }), "mock shows a run-out forecast too")
+}
+console.log("PASS: dev mock exercises the full provider surface")
+
 console.log("ALL MODEL TESTS PASS")
