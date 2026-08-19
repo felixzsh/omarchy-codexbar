@@ -71,6 +71,9 @@ omarchy bar set local.codexbar codexbarBin /usr/bin/codexbar --json
 | `refreshIntervalSec` | `120` | Background poll interval for usage (opens the panel to force a fetch) |
 | `devMock` | `false` | **Dev only.** Appends one curated mock provider that exercises every renderable field (limits, pace, credits, daily tokens), so a maintainer can preview the full UI without real provider access. Off by default; end users never see it. |
 
+> Note: `omarchy bar set` stores keys that are not in the manifest schema as
+> raw strings, so `devMock` is read accepting both `true` and `"true"`.
+
 ## Troubleshooting
 
 ```bash
@@ -85,6 +88,12 @@ omarchy shell local.codexbar status   # binary, version, widget + providers at a
   in CodexBar and check `codexbar usage --format json`.
 - The widget is always visible once placed; opening the panel explains any
   failure instead of hiding the icon.
+- The daily token chart stays empty when `codexbar cost` crashes: CodexBar
+  0.53's cost scan segfaults on some machines (SIGSEGV, exit 139). The widget
+  detects the crash and backs off with a doubling cooldown (10m up to 2h) so
+  panel opens stop spawning the crashing scan; `status` reports
+  `costCrashed`/`costBackoffSec`. This is an upstream CLI bug — report it at
+  https://github.com/steipete/CodexBar/issues.
 
 The shell caches compiled plugin QML, so after updating the plugin code the
 widget can keep running the old version until the shell restarts:
