@@ -266,6 +266,12 @@ Item {
       root.costRefreshing = false
       return
     }
+    // The dev mock already carries its own daily token history, so a real cost
+    // scan adds nothing (and, on 0.53, would crash on the first panel open).
+    if (root.devMock) {
+      root.costRefreshing = false
+      return
+    }
     root._costHandled = false
     root._costTimedOut = false
     root.costRefreshing = true
