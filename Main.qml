@@ -23,7 +23,12 @@ Item {
   // field the panel can render) is appended to the provider list so a
   // maintainer can preview the full UI without access to a real provider.
   // Defaults to off; end users never see it unless they set it explicitly.
-  property bool devMock: setting("devMock", false) === true
+  // `omarchy bar set` stores unknown keys as strings, so both the boolean and
+  // the string "true" count.
+  property bool devMock: {
+    var v = setting("devMock", false)
+    return v === true || v === "true"
+  }
 
   property bool refreshing: false
   property bool costRefreshing: false
@@ -52,6 +57,13 @@ Item {
   property bool _usageHandled: false
   property bool _costHandled: false
   property int revision: 0
+
+  // Cost crash backoff: when the cost scan dies on a signal (a known 0.53
+  // regression on some machines), cost spawns are skipped for a cooldown that
+  // doubles per crash (10m base) and resets on a successful scan.
+  property bool _costCrashed: false
+  property int _costBackoffSec: 600
+  property double _costBackoffUntilMs: 0
 
   function setting(name, fallback) {
     var value = settings ? settings[name] : undefined
@@ -247,6 +259,13 @@ Item {
       }
       return
     }
+    // CodexBar 0.53's cost scan segfaults on some machines; after a crash the
+    // process is skipped for a doubling cooldown instead of dumping core on
+    // every panel open.
+    if (Date.now() < root._costBackoffUntilMs) {
+      root.costRefreshing = false
+      return
+    }
     root._costHandled = false
     root._costTimedOut = false
     root.costRefreshing = true
@@ -261,6 +280,11 @@ Item {
     root._costSpawnedAtMs = 0
     root.costRefreshing = false
     root.lastCostRefreshedAtMs = Date.now()
+    // A successful scan clears the crash backoff and restarts the cooldown
+    // ladder at its base step.
+    root._costCrashed = false
+    root._costBackoffSec = 600
+    root._costBackoffUntilMs = 0
     var data = root.parseJsonOutput(text)
     var map = {}
     if (Array.isArray(data)) {
@@ -282,11 +306,20 @@ Item {
     root._costTimedOut = false
   }
 
+  // An exit code >= 128 means the CLI died on a signal (e.g. SIGSEGV on the
+  // cost scan) rather than exiting normally: back off so repeated panel opens
+  // stop spawning a crashing process, doubling 10m up to 2h per successful run.
   function onCostExited(exitCode) {
     if (root._costHandled) return
     root.costRefreshing = false
     root._costSpawnedAtMs = 0
     root._costTimedOut = false
+    if (exitCode >= 128) {
+      root._costCrashed = true
+      root._costBackoffSec = Math.min(7200, root._costBackoffSec * 2)
+      root._costBackoffUntilMs = Date.now() + root._costBackoffSec * 1000
+      console.warn("codexbar/cost crashed (exit " + exitCode + "); skipping cost scans for " + root._costBackoffSec + "s")
+    }
   }
 
   // Re-apply the latest daily token history onto the current provider records.
@@ -370,6 +403,8 @@ Item {
       codexbarVersion: root.codexbarVersion,
       refreshing: root.refreshing,
       costRefreshing: root.costRefreshing,
+      costCrashed: root._costCrashed,
+      costBackoffSec: root._costBackoffSec,
       stalled: root.isStalled(),
       updatedAt: new Date(root.lastRefreshedAtMs).toISOString(),
       providers: providers,
