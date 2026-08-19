@@ -53,6 +53,24 @@ Panel {
   readonly property bool hasDays: days.length > 0
   readonly property bool alarming: !!provider && provider.headlinePercent >= 0.9
 
+  // The provider picker shrinks to the widest option label so the hero's meta
+  // subtext stays visible; the chevron and paddings add a fixed allowance.
+  readonly property real providerDropdownWidth: {
+    var w = 0
+    for (var i = 0; i < providerOptions.length; i++) {
+      providerLabelMetrics.text = providerOptions[i].label
+      if (providerLabelMetrics.width > w) w = providerLabelMetrics.width
+    }
+    return Math.max(Style.space(96), Math.min(Style.space(180), w + Style.space(40)))
+  }
+
+  TextMetrics {
+    id: providerLabelMetrics
+    font.family: root.fontFamily
+    font.pixelSize: Style.font.body
+    text: ""
+  }
+
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)) }
   function alpha(c, a) { return Qt.rgba(c.r, c.g, c.b, a) }
 
@@ -382,7 +400,7 @@ Panel {
 
             trailingControl: Component {
               ProviderDropdown {
-                width: Math.min(Style.spacing.dropdownWidth, Style.space(180))
+                width: root.providerDropdownWidth
                 showLabel: false
                 fontFamily: root.fontFamily
                 options: root.providerOptions
