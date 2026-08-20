@@ -70,6 +70,14 @@ Item {
     return value === undefined || value === null ? fallback : value
   }
 
+  function hasCostCapableProvider() {
+    for (var i = 0; i < root.validProviders.length; i++) {
+      var id = String(root.validProviders[i].providerId || "")
+      if (id === "codex" || id === "claude") return true
+    }
+    return false
+  }
+
   Timer {
     id: usageTimer
     interval: root.refreshIntervalSec * 1000
@@ -117,7 +125,7 @@ Item {
   Process {
     id: usageProc
     running: false
-    onExited: root.onUsageExited(exitCode)
+    onExited: exitCode => root.onUsageExited(exitCode)
     onRunningChanged: root.onUsageRunningChanged()
     stdout: StdioCollector {
       waitForEnd: true
@@ -236,7 +244,7 @@ Item {
   Process {
     id: costProc
     running: false
-    onExited: root.onCostExited(exitCode)
+    onExited: exitCode => root.onCostExited(exitCode)
     onRunningChanged: root.onCostRunningChanged()
     stdout: StdioCollector {
       waitForEnd: true
@@ -269,6 +277,14 @@ Item {
     // The dev mock already carries its own daily token history, so a real cost
     // scan adds nothing (and, on 0.53, would crash on the first panel open).
     if (root.devMock) {
+      root.costRefreshing = false
+      return
+    }
+    // Cost history is only produced for providers with local token logs (Claude
+    // / Codex per `codexbar cost` — everything else returns `only supported for
+    // Claude, Codex` and, on 0.53, segfaults when the scan touches local history).
+    // When no valid provider needs it we skip the spawn so panel opens never dump core.
+    if (!root.hasCostCapableProvider()) {
       root.costRefreshing = false
       return
     }
