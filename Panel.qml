@@ -88,7 +88,7 @@ Panel {
     nowMs = Date.now()
   }
 
-  function refreshNow() { usage.refresh(true) }
+  function refreshNow() { usage.refresh(true); usage.refreshCost() }
 
   // ---------------------------------------------------------------- limits
 
@@ -263,10 +263,12 @@ Panel {
   onOpenedChanged: if (opened) {
     nowMs = Date.now()
     if (panelFlick) panelFlick.contentY = 0
-    // Fetch usage now (restarting the background countdown) and pull the
-    // heavier cost history for the daily token chart.
+    // Fetch usage now (restarting the background countdown). The cost history
+    // scan (`codexbar cost`) is intentionally NOT run here: on CodexBar 0.53 it
+    // segfaults, and spawning it on every panel open dumps core and trips the
+    // system "Process crashed" notification. Refresh it on demand via
+    // refreshNow() instead.
     usage.pollNow()
-    usage.refreshCost()
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
 

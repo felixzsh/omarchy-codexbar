@@ -58,12 +58,17 @@ Item {
   property bool _costHandled: false
   property int revision: 0
 
-  // Cost crash backoff: when the cost scan dies on a signal (a known 0.53
-  // regression on some machines), cost spawns are skipped for a cooldown that
-  // doubles per crash (10m base) and resets on a successful scan.
+  // Cost crash guard: CodexBar 0.53's cost scan segfaults on some machines.
+  // Once it has crashed this session we stop spawning it — the segfault is
+  // deterministic here, so a retry only dumps more core. The guard is sticky
+  // (cleared by a successful scan in onCostOutput, or a shell reload) and is
+  // detected from BOTH Process handlers: Quickshell reports a signal-killed
+  // cost process through runningChanged, not exited, so exiting via either
+  // path funnels through markCostCrashed().
   property bool _costCrashed: false
+  property bool _costDisabled: false
+  property bool _costCrashMarked: false
   property int _costBackoffSec: 600
-  property double _costBackoffUntilMs: 0
 
   function setting(name, fallback) {
     var value = settings ? settings[name] : undefined
@@ -244,7 +249,7 @@ Item {
   Process {
     id: costProc
     running: false
-    onExited: exitCode => root.onCostExited(exitCode)
+    onExited: (exitCode, exitStatus) => root.onCostExited(exitCode, exitStatus)
     onRunningChanged: root.onCostRunningChanged()
     stdout: StdioCollector {
       waitForEnd: true
@@ -267,10 +272,10 @@ Item {
       }
       return
     }
-    // CodexBar 0.53's cost scan segfaults on some machines; after a crash the
-    // process is skipped for a doubling cooldown instead of dumping core on
-    // every panel open.
-    if (Date.now() < root._costBackoffUntilMs) {
+    // CodexBar 0.53's cost scan segfaults on some machines. Once it has
+    // crashed this session, stop spawning it: a retry is pointless and only
+    // dumps more core. The guard clears on a successful scan or a shell reload.
+    if (root._costDisabled) {
       root.costRefreshing = false
       return
     }
@@ -290,6 +295,7 @@ Item {
     }
     root._costHandled = false
     root._costTimedOut = false
+    root._costCrashMarked = false
     root.costRefreshing = true
     root._costSpawnedAtMs = Date.now()
     costProc.command = [root.codexbarBin, "cost", "--format", "json"]
@@ -302,11 +308,11 @@ Item {
     root._costSpawnedAtMs = 0
     root.costRefreshing = false
     root.lastCostRefreshedAtMs = Date.now()
-    // A successful scan clears the crash backoff and restarts the cooldown
-    // ladder at its base step.
+    // A successful scan clears the crash guard so cost can run again.
     root._costCrashed = false
+    root._costDisabled = false
+    root._costCrashMarked = false
     root._costBackoffSec = 600
-    root._costBackoffUntilMs = 0
     var data = root.parseJsonOutput(text)
     var map = {}
     if (Array.isArray(data)) {
@@ -320,28 +326,43 @@ Item {
     root.mergeCost()
   }
 
+  // Single crash entry point: the cost process ended without giving us JSON.
+  // _costCrashMarked keeps the arming to exactly one per spawn even if
+  // Quickshell fires both exited and runningChanged for the same death.
+  function markCostCrashed(exitCode, exitStatus) {
+    if (root._costCrashMarked) return
+    root._costCrashMarked = true
+    root._costCrashed = true
+    root._costDisabled = true
+    console.warn("codexbar/cost crashed (exit " + exitCode + ", status " + exitStatus + "); disabling cost scans for this session")
+  }
+
   function onCostRunningChanged() {
     if (costProc.running) return
     if (root._costHandled) return
     root.costRefreshing = false
     root._costSpawnedAtMs = 0
     root._costTimedOut = false
+    // The cost process ended with no JSON — crashed, killed, or failed to
+    // start. Quickshell reports a signal death HERE (runningChanged), not via
+    // exited, so this is what catches the CodexBar 0.53 SIGSEGV. Defer one tick
+    // so a same-tick onCostOutput (a successful scan) can set _costHandled and
+    // we don't mistake success for a crash.
+    Qt.callLater(function() {
+      if (root._costHandled) return
+      root.markCostCrashed(-1, -1)
+    })
   }
 
-  // An exit code >= 128 means the CLI died on a signal (e.g. SIGSEGV on the
-  // cost scan) rather than exiting normally: back off so repeated panel opens
-  // stop spawning a crashing process, doubling 10m up to 2h per successful run.
-  function onCostExited(exitCode) {
+  // Backup crash path: if Quickshell does surface the death through exited
+  // (exitStatus !== 0, or defensively a >=128 code), catch it here too.
+  function onCostExited(exitCode, exitStatus) {
     if (root._costHandled) return
     root.costRefreshing = false
     root._costSpawnedAtMs = 0
     root._costTimedOut = false
-    if (exitCode >= 128) {
-      root._costCrashed = true
-      root._costBackoffSec = Math.min(7200, root._costBackoffSec * 2)
-      root._costBackoffUntilMs = Date.now() + root._costBackoffSec * 1000
-      console.warn("codexbar/cost crashed (exit " + exitCode + "); skipping cost scans for " + root._costBackoffSec + "s")
-    }
+    if (exitCode >= 128 || (exitStatus !== undefined && exitStatus !== 0))
+      root.markCostCrashed(exitCode, exitStatus)
   }
 
   // Re-apply the latest daily token history onto the current provider records.
@@ -426,6 +447,7 @@ Item {
       refreshing: root.refreshing,
       costRefreshing: root.costRefreshing,
       costCrashed: root._costCrashed,
+      costDisabled: root._costDisabled,
       costBackoffSec: root._costBackoffSec,
       stalled: root.isStalled(),
       updatedAt: new Date(root.lastRefreshedAtMs).toISOString(),
