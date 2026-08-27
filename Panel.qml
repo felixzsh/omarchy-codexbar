@@ -30,6 +30,16 @@ Panel {
   // Selection follows the provider id, not the slot: a scan that lands while
   // the panel is open swaps data under a stable selection.
   property string selectedProviderId: ""
+  // Persisted provider selection, restored on every shell reload without
+  // touching shell.json. Stored as a tiny JSON file under XDG_STATE_HOME, the
+  // same convention omarchy uses for other per-plugin state (e.g.
+  // clipboard-history.json). The remembered id wins over the default; when
+  // nothing is remembered we fall back to `defaultProviderId`.
+  readonly property string codexbarHome: Quickshell.env("HOME")
+  readonly property string selectionFilePath: codexbarHome + "/.local/state/omarchy/codexbar-selected.json"
+  readonly property string defaultProviderId: "codex"
+  property string _persistedProviderId: ""
+  property bool _persistedApplied: false
   readonly property int providerIndex: {
     for (var i = 0; i < providers.length; i++)
       if (providers[i].providerId === selectedProviderId) return i
@@ -78,17 +88,74 @@ Panel {
     var found = false
     for (var i = 0; i < providers.length; i++)
       if (providers[i].providerId === selectedProviderId) { found = true; break }
-    if (!found && providers.length > 0) selectedProviderId = providers[0].providerId
-    else if (providers.length === 0) selectedProviderId = ""
+    if (found) return
+    if (providers.length === 0) { selectedProviderId = ""; return }
+    // A missing selection (initial load or the provider vanished) prefers the
+    // remembered choice, then the configured default, then the first provider.
+    selectedProviderId = root.resolveInitialSelection()
   }
 
   function selectProviderId(id) {
     selectedProviderId = id
+    root._persistedProviderId = id
+    root._persistedApplied = true
+    root.savePersistedSelection(id)
     if (panelFlick) panelFlick.contentY = 0
     nowMs = Date.now()
   }
 
   function refreshNow() { usage.refresh(true); usage.refreshCost() }
+
+  // ---- persisted provider selection ------------------------------------
+
+  // True when `id` is present in the given provider record list.
+  function providerListHasId(list, id) {
+    if (!Array.isArray(list) || !id) return false
+    for (var i = 0; i < list.length; i++)
+      if (list[i].providerId === id) return true
+    return false
+  }
+
+  // Resolves the selection used when the current one is absent: the remembered
+  // choice first, then the configured default, then the first provider.
+  function resolveInitialSelection() {
+    var preferred = root._persistedProviderId !== "" ? root._persistedProviderId : root.defaultProviderId
+    return root.providerListHasId(providers, preferred) ? preferred : (providers.length > 0 ? providers[0].providerId : "")
+  }
+
+  function loadPersistedSelection() {
+    readSelectionProc.command = ["cat", root.selectionFilePath]
+    readSelectionProc.running = true
+  }
+
+  function applyPersistedSelection(text) {
+    try {
+      var d = JSON.parse(String(text || "").trim())
+      if (d && typeof d === "object" && typeof d.providerId === "string" && d.providerId !== "")
+        root._persistedProviderId = d.providerId
+    } catch (e) {}
+    root.tryApplyPersisted()
+  }
+
+  // Applies the remembered choice once, overriding the initial default. Runs
+  // after the async read finishes; later manual selections take precedence.
+  function tryApplyPersisted() {
+    if (root._persistedApplied) return
+    if (!root.providerListHasId(root.validProviders, root._persistedProviderId)) return
+    selectedProviderId = root._persistedProviderId
+    root._persistedApplied = true
+  }
+
+  function savePersistedSelection(id) {
+    if (!id) return
+    var payload = JSON.stringify({ providerId: id })
+    writeSelectionProc.command = [
+      "sh", "-c",
+      "mkdir -p \"$(dirname \"$2\")\" && printf '%s\\n' \"$1\" > \"$2\"",
+      "_", payload, root.selectionFilePath
+    ]
+    writeSelectionProc.running = true
+  }
 
   // ---------------------------------------------------------------- limits
 
@@ -276,6 +343,28 @@ Panel {
     id: usage
     settings: root.settings
   }
+
+  // Reads the persisted provider selection once at startup.
+  Process {
+    id: readSelectionProc
+    running: false
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: function(text) { root.applyPersistedSelection(text) }
+    }
+    stderr: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: function(text) {}
+    }
+  }
+
+  // Writes the persisted provider selection whenever it changes.
+  Process {
+    id: writeSelectionProc
+    running: false
+  }
+
+  Component.onCompleted: root.loadPersistedSelection()
 
   // Cheap enough to keep running: it only re-evaluates text bindings, and a
   // stale "resets in 2h" on a panel that is open is worse than a timer.
