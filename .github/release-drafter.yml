@@ -1,0 +1,13 @@
+autolabeler:
+  - label: security
+    title:
+      - '/^(security|fix\(security\))(\([^)]*\))?!?:/i'
+  - label: enhancement
+    title:
+      - '/^feat(\([^)]*\))?!?:/i'
+  - label: bug
+    title:
+      - '/^fix(?!\(security\))(\([^)]*\))?!?:/i'
+  - label: documentation
+    title:
+      - '/^docs(\([^)]*\))?!?:/i'
