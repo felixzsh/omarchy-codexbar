@@ -58,17 +58,17 @@ Panel {
   readonly property real providerDropdownWidth: {
     var w = 0
     for (var i = 0; i < providerOptions.length; i++) {
-      providerLabelMetrics.text = providerOptions[i].label
-      if (providerLabelMetrics.width > w) w = providerLabelMetrics.width
+      var label = providerOptions[i].label || ""
+      var width = providerFontMetrics.advanceWidth(label)
+      if (width > w) w = width
     }
     return Math.max(Style.space(96), Math.min(Style.space(180), w + Style.space(40)))
   }
 
-  TextMetrics {
-    id: providerLabelMetrics
+  FontMetrics {
+    id: providerFontMetrics
     font.family: root.fontFamily
     font.pixelSize: Style.font.body
-    text: ""
   }
 
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)) }
