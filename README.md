@@ -14,7 +14,7 @@ Model Usage style. It never reads provider databases or guesses usage itself.
 
 ## Requirements
 
-- `codexbar-cli` on `PATH` (Arch: `yay -S codexbar-cli`)
+- `codexbar` on `PATH` (Arch: `yay -S codexbar-cli`)
 - Each provider you want to track must be configured in CodexBar itself. How
   that is done depends on the provider, so follow the
   [CodexBar configuration docs](https://github.com/steipete/CodexBar/blob/main/docs/configuration.md).
