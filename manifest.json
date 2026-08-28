@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "felixzsh.codexbar",
   "name": "CodexBar",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "author": "felixzsh",
   "license": "MIT",
   "description": "Every AI coding limit in one Omarchy panel, powered by the CodexBar CLI.",
