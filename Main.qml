@@ -48,6 +48,8 @@ Item {
   property bool _usageTimedOut: false
   property bool _costTimedOut: false
   property bool _usageExitHandled: false
+  property bool _usageCrashed: false
+  property bool _usageDisabled: false
 
   // Every provider CodexBar returned (valid ones first, errors trailing) and
   // the strict subset the panel shows.
@@ -150,6 +152,10 @@ Item {
   }
 
   function refresh(force) {
+    if (root._usageDisabled) {
+      root.refreshing = false
+      return
+    }
     if (usageProc.running) {
       // A wedged process would freeze the whole poll loop; kill it so the
       // exit handler can clear state and a retry can start a fresh run.
@@ -192,6 +198,8 @@ Item {
     }
     root.lastError = ""
     root.usageStatusText = ""
+    root._usageCrashed = false
+    root._usageDisabled = false
     root.lastRefreshedAtMs = Date.now()
     root.allProviders = Cbx.normalizeProviders(data)
     if (root.devMock) {
@@ -215,6 +223,12 @@ Item {
       root._usageExitHandled = false
       return
     }
+    // Quickshell can report a signal-killed process only through runningChanged.
+    // If this was a real spawn (rather than a failed start), treat it as a crash.
+    if (root._usageSpawnedAtMs > 0) {
+      root.markUsageCrashed(-1)
+      return
+    }
     root.refreshing = false
     root._usageSpawnedAtMs = 0
     root.allProviders = []
@@ -222,6 +236,18 @@ Item {
     root.lastError = "CodexBar failed to start. Is `" + root.codexbarBin + "` on PATH?"
     root.usageStatusText = root.lastError
     root.revision++
+  }
+
+  function markUsageCrashed(exitCode) {
+    if (root._usageCrashed) return
+    root._usageCrashed = true
+    root._usageDisabled = true
+    root.refreshing = false
+    root._usageSpawnedAtMs = 0
+    root.lastError = "CodexBar usage crashed (exit " + exitCode + "). Usage refreshes are disabled for this session."
+    root.usageStatusText = root.lastError
+    root.revision++
+    console.warn("codexbar/usage crashed; disabling usage refreshes for this session")
   }
 
   function onUsageExited(exitCode) {
@@ -235,6 +261,10 @@ Item {
         + Math.round(root._usageTimeoutMs / 1000) + "s. Retrying in a moment."
       root.revision++
       usageRetryTimer.start()
+      return
+    }
+    if (exitCode >= 128 || exitCode < 0) {
+      root.markUsageCrashed(exitCode)
       return
     }
     root.allProviders = []
@@ -450,6 +480,8 @@ Item {
       costDisabled: root._costDisabled,
       costBackoffSec: root._costBackoffSec,
       stalled: root.isStalled(),
+      usageCrashed: root._usageCrashed,
+      usageDisabled: root._usageDisabled,
       updatedAt: new Date(root.lastRefreshedAtMs).toISOString(),
       providers: providers,
       usageStatusText: root.usageStatusText
