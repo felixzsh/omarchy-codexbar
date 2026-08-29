@@ -478,6 +478,7 @@ Panel {
                   color: root.alpha(root.foreground, 0.12)
 
                   Text {
+                    textFormat: Text.PlainText
                     anchors.centerIn: parent
                     text: root.providerInitials(root.provider)
                     color: root.foreground
@@ -505,6 +506,7 @@ Panel {
           }
 
           Text {
+            textFormat: Text.PlainText
             visible: root.providers.length === 0
             width: parent.width
             topPadding: Style.space(24)
@@ -526,6 +528,7 @@ Panel {
             radius: Style.cornerRadius
 
             Text {
+              textFormat: Text.PlainText
               id: statusText
               anchors.left: parent.left
               anchors.right: parent.right
@@ -587,6 +590,7 @@ Panel {
             }
 
             Text {
+              textFormat: Text.PlainText
               width: parent.width
               text: root.creditsLine(root.provider)
               color: root.foreground
@@ -630,6 +634,7 @@ Panel {
           }
 
           Text {
+            textFormat: Text.PlainText
             visible: text !== ""
             width: parent.width
             topPadding: Style.space(2)
@@ -659,6 +664,7 @@ Panel {
       implicitHeight: Math.max(limitLabel.implicitHeight, limitValue.implicitHeight)
 
       Text {
+        textFormat: Text.PlainText
         id: limitLabel
         text: limitRow.window ? limitRow.window.title : ""
         color: root.foreground
@@ -669,6 +675,7 @@ Panel {
       }
 
       Text {
+        textFormat: Text.PlainText
         id: limitValue
         text: limitRow.window && limitRow.window.percent >= 0
           ? Math.round(limitRow.window.percent * 100) + "%"
@@ -689,6 +696,7 @@ Panel {
     }
 
     Text {
+      textFormat: Text.PlainText
       width: parent.width
       text: {
         var remainingMs = root.resetMsFor(limitRow.window)
@@ -702,6 +710,7 @@ Panel {
     // CodexBar's pace forecast: how far the window is expected to be used at
     // the current burn rate, and whether it lasts to the reset.
     Text {
+      textFormat: Text.PlainText
       visible: Boolean(limitRow.window && limitRow.window.pace)
       width: parent.width
       text: {
@@ -760,6 +769,7 @@ Panel {
     implicitHeight: Math.max(dayLabel.implicitHeight, dayValue.implicitHeight) + Style.spacing.sm
 
     Text {
+      textFormat: Text.PlainText
       id: dayLabel
       text: root.dayLabel(dayRow.day ? dayRow.day.date : "", dayRow.today)
       color: dayRow.today ? root.foreground : root.dim
@@ -797,6 +807,7 @@ Panel {
     }
 
     Text {
+      textFormat: Text.PlainText
       id: dayValue
       text: usage.formatTokenCount(dayRow.day ? Number(dayRow.day.messageCount || 0) : 0)
       color: dayRow.today ? root.foreground : root.dim
