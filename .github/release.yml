@@ -9,6 +9,9 @@ changelog:
     - title: Security
       labels:
         - security
+    - title: Refactors
+      labels:
+        - refactor
     - title: Documentation
       labels:
         - documentation

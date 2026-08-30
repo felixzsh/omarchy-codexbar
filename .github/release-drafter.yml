@@ -2,6 +2,9 @@ autolabeler:
   - label: security
     title:
       - '/^(security|fix\(security\))(\([^)]*\))?!?:/i'
+  - label: refactor
+    title:
+      - '/^refactor(\([^)]*\))?!?:/i'
   - label: enhancement
     title:
       - '/^feat(\([^)]*\))?!?:/i'
