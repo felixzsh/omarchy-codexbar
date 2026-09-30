@@ -187,6 +187,13 @@ function normalizeWindows(usage, paces) {
     if (order[i] === "primary") w.title = "Session"
     out.push(w)
   }
+  var extras = Array.isArray(usage.extraRateWindows) ? usage.extraRateWindows : []
+  for (var j = 0; j < extras.length; j++) {
+    var extra = normalizeWindow(extras[j] && extras[j].window, null, null)
+    if (!extra || extra.percent < 0) continue
+    extra.title = cleanText(extras[j].title) || extra.title
+    out.push(extra)
+  }
   return out
 }
 
