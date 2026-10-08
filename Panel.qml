@@ -3,6 +3,7 @@ import QtQuick.Controls
 import Quickshell
 import Quickshell.Io
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 import "components"
 
@@ -15,11 +16,11 @@ Panel {
   ipcTarget: "local.codexbar"
   manageIpc: false
 
-  readonly property color foreground: bar ? bar.foreground : Color.foreground
-  readonly property color urgent: bar ? bar.urgent : Color.urgent
+  readonly property color foreground: bar ? bar.foreground : Commons.Color.foreground
+  readonly property color urgent: bar ? bar.urgent : Commons.Color.urgent
   readonly property color dim: Qt.darker(foreground, 1.55)
-  readonly property color surface: Color.popups.background
-  readonly property color track: Style.selectedFillFor(foreground, Color.accent)
+  readonly property color surface: Commons.Color.popups.background
+  readonly property color track: Style.selectedFillFor(foreground, Commons.Color.accent)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
 
   // Countdowns and "updated" read this instead of Date.now() so the panel
