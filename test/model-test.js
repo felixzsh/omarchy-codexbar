@@ -222,4 +222,33 @@ console.log("PASS: renamed and new provider ids are human-readable")
 }
 console.log("PASS: dev mock exercises the full provider surface")
 
+// Fixture: Claude's per-model weekly cap arrives in usage.extraRateWindows
+// (captured from `codexbar usage --provider claude --format json`, 0.69.0).
+{
+  const p = model.normalizeProviders([
+    {
+      provider: "claude",
+      source: "claude",
+      usage: {
+        primary: { resetsAt: "2026-09-30T03:29:00Z", usedPercent: 36, windowMinutes: 300 },
+        secondary: { resetsAt: "2026-10-01T06:59:00Z", usedPercent: 33, windowMinutes: 10080 },
+        tertiary: null,
+        extraRateWindows: [
+          {
+            id: "claude-weekly-scoped-fable",
+            title: "Fable only",
+            window: { resetsAt: "2026-10-01T06:59:00Z", usedPercent: 15, windowMinutes: 10080 }
+          }
+        ]
+      }
+    }
+  ])[0]
+  assert.deepStrictEqual(p.windows.map(function(w) { return w.title }), ["Session", "Weekly", "Fable only"])
+  assert.strictEqual(p.windows[2].percent, 0.15)
+  assert.strictEqual(p.windows[2].resetAt, "2026-10-01T06:59:00Z")
+  assert.strictEqual(p.windows[2].pace, null)
+  assert.strictEqual(p.headlinePercent, 0.36)
+}
+console.log("PASS: extra rate windows keep their CLI titles")
+
 console.log("ALL MODEL TESTS PASS")
